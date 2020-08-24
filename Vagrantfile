@@ -21,7 +21,7 @@ hosts = {
 puppet_bootstrap_file = "https://raw.githubusercontent.com/bobthebutcher/puppet-utils/master/puppet-bootstrap.sh"
 
 $hosts = <<~"SCRIPT"
-echo  #### EDITING HOSTS FILE ####
+echo "#### EDITING HOSTS FILE ####"
 sudo tee -a /etc/hosts > /dev/null << "EOF"
 #{hosts[:puppet_server][:ipv4_address]} #{hosts[:puppet_server][:hostname]}.#{domain} #{hosts[:puppet_server][:hostname]} puppet
 #{hosts[:centos_agent][:ipv4_address]} #{hosts[:centos_agent][:hostname]}.#{domain} #{hosts[:centos_agent][:hostname]}
@@ -30,49 +30,49 @@ EOF
 SCRIPT
 
 $hostname = <<~"SCRIPT"
-echo  #### EDITING HOSTNAME ####
+echo "#### EDITING HOSTNAME ####"
 echo $1 | sudo tee /etc/hostname;
 sudo /bin/hostname -F /etc/hostname;
 SCRIPT
 
 $puppet_server_install = <<~"SCRIPT"
-echo  #### PUPPET SERVER INSTALL ####
+echo "#### PUPPET SERVER INSTALL ####"
 sudo yum install -y puppetserver;
 sudo systemctl start puppetserver.service;
 sudo systemctl enable puppetserver.service;
 SCRIPT
 
 $puppet_server_config = <<~"SCRIPT"
-echo  #### PUPPET SERVER CONFIG ####
+echo "#### PUPPET SERVER CONFIG ####"
 sudo /opt/puppetlabs/bin/puppet config set server #{hosts[:puppet_server][:hostname]}.#{domain} --section main;
 sudo /opt/puppetlabs/bin/puppet config set certname #{hosts[:puppet_server][:hostname]}.#{domain} --section main;
 echo *.#{domain} | sudo tee /etc/puppetlabs/puppet/autosign.conf;
 SCRIPT
 
 $puppet_server_restart = <<~"SCRIPT"
-echo  #### PUPPET SERVER RESTART ####
+echo "#### PUPPET SERVER RESTART ####"
 sudo systemctl restart puppetserver.service;
 SCRIPT
 
 $puppet_agent_config = <<~"SCRIPT"
-echo  #### PUPPET AGENT CONFIG ####
+echo "#### PUPPET AGENT CONFIG ####"
 sudo /opt/puppetlabs/bin/puppet config set server #{hosts[:puppet_server][:hostname]}.#{domain} --section main;
 sudo /opt/puppetlabs/bin/puppet config set certname $1.#{domain} --section main;
 SCRIPT
 
 $puppet_server_firewall = <<~"SCRIPT"
-echo  #### PUPPET SERVER FIREWALL ####
+echo "#### PUPPET SERVER FIREWALL ####"
 sudo firewall-cmd --add-port=8140/tcp --permanent;
 sudo firewall-cmd --reload;
 SCRIPT
 
 $puppet_server_ready_check = <<~"SCRIPT"
-echo  #### PUPPET SERVER READY CHECK ####
+echo "#### PUPPET SERVER READY CHECK ####"
 timeout 600 bash -c 'until printf "" 2>>/dev/null >>/dev/tcp/$0/$1; do sleep 1; done' #{hosts[:puppet_server][:hostname]}.#{domain} 8140;
 SCRIPT
 
 $puppet_agent_register = <<~"SCRIPT"
-echo  #### PUPPET AGENT REGISTER ####
+echo "#### PUPPET AGENT REGISTER ####"
 sudo /opt/puppetlabs/bin/puppet agent -t;
 SCRIPT
 
