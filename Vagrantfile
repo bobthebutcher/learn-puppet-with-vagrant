@@ -19,13 +19,10 @@ hosts = {
 }
 
 $hosts = <<~"SCRIPT"
-sudo tee /etc/hosts > /dev/null << "EOF"
-127.0.0.1   localhost localhost4
-::1         localhost localhost6
-
-#{hosts[:puppet_server][:ipv4_address]} puppet puppet-server.#{domain}
-#{hosts[:centos_agent][:ipv4_address]} #{hosts[:centos_agent][:hostname]} #{hosts[:centos_agent][:hostname]}.#{domain}
-#{hosts[:ubuntu_agent][:ipv4_address]} #{hosts[:ubuntu_agent][:hostname]} #{hosts[:ubuntu_agent][:hostname]}.#{domain}
+sudo tee -a /etc/hosts > /dev/null << "EOF"
+#{hosts[:puppet_server][:ipv4_address]} #{hosts[:puppet_server][:hostname]}.#{domain} #{hosts[:puppet_server][:hostname]} puppet
+#{hosts[:centos_agent][:ipv4_address]} #{hosts[:centos_agent][:hostname]}.#{domain} #{hosts[:centos_agent][:hostname]}
+#{hosts[:ubuntu_agent][:ipv4_address]} #{hosts[:ubuntu_agent][:hostname]}.#{domain} #{hosts[:ubuntu_agent][:hostname]}
 EOF
 SCRIPT
 
@@ -75,28 +72,24 @@ Vagrant.configure("2") do |config|
     hostname = hosts[:puppet_server][:hostname]
 
     node.vm.box = "roboxes/centos7"
-
+    
     node.vm.provider :libvirt do |libvirt|
       libvirt.cpus = 2
       libvirt.memory = 4096
     end
 
     node.vm.network :private_network, ip: "#{hosts[:puppet_server][:ipv4_address]}"
+
     node.vm.provision "shell", path: "puppet-bootstrap.sh" 
     node.vm.provision "shell", inline: $hosts
     node.vm.provision "shell" do |s|
       s.inline = $hostname
       s.args = [hostname]
     end
-
-    node.vm.provision "shell", inline: $puppet_server_firewall
-    
     node.vm.provision "shell", inline: $puppet_server_install
     node.vm.provision "shell", inline: $puppet_server_config
     node.vm.provision "shell", inline: $puppet_server_restart
-    
-    node.vm.provision "shell", inline: $puppet_server_ready_check
-    node.vm.provision "shell", inline: $puppet_agent_register
+    node.vm.provision "shell", inline: $puppet_server_firewall
 
   end
 
@@ -105,19 +98,19 @@ Vagrant.configure("2") do |config|
     hostname = hosts[:centos_agent][:hostname]
 
     node.vm.box = "roboxes/centos7"
+
     node.vm.network :private_network, ip: "#{hosts[:centos_agent][:ipv4_address]}"
+
     node.vm.provision "shell", path: "puppet-bootstrap.sh" 
     node.vm.provision "shell", inline: $hosts
     node.vm.provision "shell" do |s|
       s.inline = $hostname
       s.args = [hostname]
     end
-
     node.vm.provision "shell" do |s|
       s.inline = $puppet_agent_config
       s.args = [hostname]
     end
-
     node.vm.provision "shell", inline: $puppet_server_ready_check
     node.vm.provision "shell", inline: $puppet_agent_register
 
@@ -128,19 +121,19 @@ Vagrant.configure("2") do |config|
     hostname = hosts[:ubuntu_agent][:hostname]
 
     node.vm.box = "roboxes/ubuntu1804"
+
     node.vm.network :private_network, ip: "#{hosts[:ubuntu_agent][:ipv4_address]}"
+
     node.vm.provision "shell", path: "puppet-bootstrap.sh"
     node.vm.provision "shell", inline: $hosts
     node.vm.provision "shell" do |s|
       s.inline = $hostname
       s.args = [hostname]
     end
-    
     node.vm.provision "shell" do |s|
       s.inline = $puppet_agent_config
       s.args = [hostname]
     end
-
     node.vm.provision "shell", inline: $puppet_server_ready_check
     node.vm.provision "shell", inline: $puppet_agent_register
 
