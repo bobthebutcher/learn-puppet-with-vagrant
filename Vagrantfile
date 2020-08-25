@@ -4,28 +4,48 @@
 domain = "testlab"
 
 hosts = {
-  puppet_server: {
-    hostname: "puppet-server",
+  server01: {
+    hostname: "server01",
     ipv4_address: "192.168.50.10",
+    vagrant_box: "roboxes/centos7",
+    puppet_server: true,
   },
-  centos_agent: {
-    hostname: "centos-agent",
-    ipv4_address: "192.168.50.11",
+  agent01: {
+    hostname: "agent01",
+    ipv4_address: "192.168.50.111",
+    vagrant_box: "roboxes/centos7",
+    puppet_server: false,
   },
-  ubuntu_agent: {
-    hostname: "ubuntu-agent",
-    ipv4_address: "192.168.50.12",
+  agent02: {
+    hostname: "agent02",
+    ipv4_address: "192.168.50.112",
+    vagrant_box: "roboxes/ubuntu1804",
+    puppet_server: false,
   }
 }
+
+def get_hosts(hosts, domain)
+
+  output = ""
+
+  hosts.each do |host, data|
+    if data[:puppet_server]
+      output << "#{data[:ipv4_address]} #{data[:hostname]}.#{domain} #{data[:hostname]} puppet\n"
+    else
+      output << "#{data[:ipv4_address]} #{data[:hostname]}.#{domain} #{data[:hostname]} \n"
+    end
+  end
+
+  return output
+
+end
 
 puppet_bootstrap_file = "https://raw.githubusercontent.com/bobthebutcher/puppet-utils/master/puppet-bootstrap.sh"
 
 $hosts = <<~"SCRIPT"
 echo "#### EDITING HOSTS FILE ####"
 sudo tee -a /etc/hosts > /dev/null << "EOF"
-#{hosts[:puppet_server][:ipv4_address]} #{hosts[:puppet_server][:hostname]}.#{domain} #{hosts[:puppet_server][:hostname]} puppet
-#{hosts[:centos_agent][:ipv4_address]} #{hosts[:centos_agent][:hostname]}.#{domain} #{hosts[:centos_agent][:hostname]}
-#{hosts[:ubuntu_agent][:ipv4_address]} #{hosts[:ubuntu_agent][:hostname]}.#{domain} #{hosts[:ubuntu_agent][:hostname]}
+#{get_hosts(hosts, domain)}
 EOF
 SCRIPT
 
@@ -36,39 +56,39 @@ sudo /bin/hostname -F /etc/hostname;
 SCRIPT
 
 $puppet_server_install = <<~"SCRIPT"
-echo "#### PUPPET SERVER INSTALL ####"
+echo "#### PUPPET SERVER01 INSTALL ####"
 sudo yum install -y puppetserver;
 sudo systemctl start puppetserver.service;
 sudo systemctl enable puppetserver.service;
 SCRIPT
 
 $puppet_server_config = <<~"SCRIPT"
-echo "#### PUPPET SERVER CONFIG ####"
-sudo /opt/puppetlabs/bin/puppet config set server #{hosts[:puppet_server][:hostname]}.#{domain} --section main;
-sudo /opt/puppetlabs/bin/puppet config set certname #{hosts[:puppet_server][:hostname]}.#{domain} --section main;
+echo "#### PUPPET SERVER01 CONFIG ####"
+sudo /opt/puppetlabs/bin/puppet config set server01 #{hosts[:server01][:hostname]}.#{domain} --section main;
+sudo /opt/puppetlabs/bin/puppet config set certname #{hosts[:server01][:hostname]}.#{domain} --section main;
 echo *.#{domain} | sudo tee /etc/puppetlabs/puppet/autosign.conf;
 SCRIPT
 
 $puppet_server_restart = <<~"SCRIPT"
-echo "#### PUPPET SERVER RESTART ####"
+echo "#### PUPPET SERVER01 RESTART ####"
 sudo systemctl restart puppetserver.service;
 SCRIPT
 
 $puppet_agent_config = <<~"SCRIPT"
 echo "#### PUPPET AGENT CONFIG ####"
-sudo /opt/puppetlabs/bin/puppet config set server #{hosts[:puppet_server][:hostname]}.#{domain} --section main;
+sudo /opt/puppetlabs/bin/puppet config set server01 #{hosts[:server01][:hostname]}.#{domain} --section main;
 sudo /opt/puppetlabs/bin/puppet config set certname $1.#{domain} --section main;
 SCRIPT
 
 $puppet_server_firewall = <<~"SCRIPT"
-echo "#### PUPPET SERVER FIREWALL ####"
+echo "#### PUPPET SERVER01 FIREWALL ####"
 sudo firewall-cmd --add-port=8140/tcp --permanent;
 sudo firewall-cmd --reload;
 SCRIPT
 
 $puppet_server_ready_check = <<~"SCRIPT"
-echo "#### PUPPET SERVER READY CHECK ####"
-timeout 600 bash -c 'until printf "" 2>>/dev/null >>/dev/tcp/$0/$1; do sleep 1; done' #{hosts[:puppet_server][:hostname]}.#{domain} 8140;
+echo "#### PUPPET SERVER01 READY CHECK ####"
+timeout 600 bash -c 'until printf "" 2>>/dev/null >>/dev/tcp/$0/$1; do sleep 1; done' #{hosts[:server01][:hostname]}.#{domain} 8140;
 SCRIPT
 
 $puppet_agent_register = <<~"SCRIPT"
@@ -78,77 +98,53 @@ SCRIPT
 
 Vagrant.configure("2") do |config|
 
-  config.vm.define "puppet-server" do |node|
+  hosts.each do |host, data|
 
-    hostname = hosts[:puppet_server][:hostname]
+    config.vm.define host do |node|
 
-    node.vm.box = "roboxes/centos7"
+      node.vm.box = data[:vagrant_box]
 
-    node.vm.synced_folder "./puppet-code/", "/vagrant/puppet-code/", type: "rsync"
+      node.vm.network :private_network, ip: data[:ipv4_address]
 
-    node.vm.provider :libvirt do |libvirt|
-      libvirt.cpus = 2
-      libvirt.memory = 4096
+      if data[:puppet_server]
+
+        node.vm.synced_folder "./puppet-code/environments/", "/etc/puppetlabs/code/environments/", type: "rsync"
+
+        node.vm.provider :libvirt do |libvirt|
+          libvirt.cpus = 2
+          libvirt.memory = 4096
+        end
+
+      end
+
+      node.vm.provision "shell", path: puppet_bootstrap_file
+      node.vm.provision "shell", inline: $hosts
+      node.vm.provision "shell" do |s|
+        s.inline = $hostname
+        s.args = [data[:hostname]]
+      end
+
+      if data[:puppet_server]
+
+        node.vm.provision "shell", inline: $puppet_server_install
+        node.vm.provision "shell", inline: $puppet_server_config
+        node.vm.provision "shell", inline: $puppet_server_restart
+        node.vm.provision "shell", inline: $puppet_server_firewall
+
+      else
+
+        node.vm.provision "shell" do |s|
+          s.inline = $puppet_agent_config
+          s.args = [data[:hostname]]
+
+      end
+      
+      node.vm.provision "shell", inline: $puppet_server_ready_check
+      node.vm.provision "shell", inline: $puppet_agent_register
+
+      end
+
     end
-
-    node.vm.network :private_network, ip: "#{hosts[:puppet_server][:ipv4_address]}"
-
-    node.vm.provision "shell", path: puppet_bootstrap_file
-    node.vm.provision "shell", inline: $hosts
-    node.vm.provision "shell" do |s|
-      s.inline = $hostname
-      s.args = [hostname]
-    end
-    node.vm.provision "shell", inline: $puppet_server_install
-    node.vm.provision "shell", inline: $puppet_server_config
-    node.vm.provision "shell", inline: $puppet_server_restart
-    node.vm.provision "shell", inline: $puppet_server_firewall
-
-  end
-
-  config.vm.define "centos-agent" do |node|
-
-    hostname = hosts[:centos_agent][:hostname]
-
-    node.vm.box = "roboxes/centos7"
-
-    node.vm.network :private_network, ip: "#{hosts[:centos_agent][:ipv4_address]}"
-
-    node.vm.provision "shell", path: puppet_bootstrap_file
-    node.vm.provision "shell", inline: $hosts
-    node.vm.provision "shell" do |s|
-      s.inline = $hostname
-      s.args = [hostname]
-    end
-    node.vm.provision "shell" do |s|
-      s.inline = $puppet_agent_config
-      s.args = [hostname]
-    end
-    node.vm.provision "shell", inline: $puppet_server_ready_check
-    node.vm.provision "shell", inline: $puppet_agent_register
-
-  end
-
-  config.vm.define "ubuntu-agent" do |node|
-
-    hostname = hosts[:ubuntu_agent][:hostname]
-
-    node.vm.box = "roboxes/ubuntu1804"
-
-    node.vm.network :private_network, ip: "#{hosts[:ubuntu_agent][:ipv4_address]}"
-
-    node.vm.provision "shell", path: puppet_bootstrap_file
-    node.vm.provision "shell", inline: $hosts
-    node.vm.provision "shell" do |s|
-      s.inline = $hostname
-      s.args = [hostname]
-    end
-    node.vm.provision "shell" do |s|
-      s.inline = $puppet_agent_config
-      s.args = [hostname]
-    end
-    node.vm.provision "shell", inline: $puppet_server_ready_check
-    node.vm.provision "shell", inline: $puppet_agent_register
 
   end
 
