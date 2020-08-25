@@ -1,0 +1,3 @@
+user { "bradmin":
+  ensure => "present",
+}

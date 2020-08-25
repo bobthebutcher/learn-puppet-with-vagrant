@@ -1,0 +1,3 @@
+package { "cowsay":
+  ensure => "present",
+}

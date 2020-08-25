@@ -84,6 +84,8 @@ Vagrant.configure("2") do |config|
 
     node.vm.box = "roboxes/centos7"
 
+    node.vm.synced_folder "./puppet-code/", "/vagrant/puppet-code/", type: "rsync"
+
     node.vm.provider :libvirt do |libvirt|
       libvirt.cpus = 2
       libvirt.memory = 4096
