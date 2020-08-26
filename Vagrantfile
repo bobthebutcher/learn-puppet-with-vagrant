@@ -33,7 +33,7 @@ def get_hosts(hosts, domain)
     if data[:puppet_server]
       output << "#{entry} puppet\n"
     else
-      output << "#{entry} \n"
+      output << "#{entry}\n"
     end
   end
 
