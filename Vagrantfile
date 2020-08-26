@@ -29,10 +29,11 @@ def get_hosts(hosts, domain)
   output = ""
 
   hosts.each do |host, data|
+    entry = "#{data[:ipv4_address]} #{data[:hostname]}.#{domain} #{data[:hostname]}"
     if data[:puppet_server]
-      output << "#{data[:ipv4_address]} #{data[:hostname]}.#{domain} #{data[:hostname]} puppet\n"
+      output << "#{entry} puppet\n"
     else
-      output << "#{data[:ipv4_address]} #{data[:hostname]}.#{domain} #{data[:hostname]} \n"
+      output << "#{entry} \n"
     end
   end
 
@@ -41,6 +42,8 @@ def get_hosts(hosts, domain)
 end
 
 puppet_bootstrap_file = "https://raw.githubusercontent.com/bobthebutcher/puppet-utils/master/puppet-bootstrap.sh"
+
+puppet_binary = "/opt/puppetlabs/bin/puppet"
 
 $hosts = <<~"SCRIPT"
 echo "#### EDITING HOSTS FILE ####"
@@ -64,8 +67,8 @@ SCRIPT
 
 $puppet_server_config = <<~"SCRIPT"
 echo "#### PUPPET SERVER01 CONFIG ####"
-sudo /opt/puppetlabs/bin/puppet config set server01 #{hosts[:server01][:hostname]}.#{domain} --section main;
-sudo /opt/puppetlabs/bin/puppet config set certname #{hosts[:server01][:hostname]}.#{domain} --section main;
+sudo #{puppet_binary} config set server #{hosts[:server01][:hostname]}.#{domain} --section main;
+sudo #{puppet_binary} config set certname #{hosts[:server01][:hostname]}.#{domain} --section main;
 echo *.#{domain} | sudo tee /etc/puppetlabs/puppet/autosign.conf;
 SCRIPT
 
@@ -76,8 +79,8 @@ SCRIPT
 
 $puppet_agent_config = <<~"SCRIPT"
 echo "#### PUPPET AGENT CONFIG ####"
-sudo /opt/puppetlabs/bin/puppet config set server01 #{hosts[:server01][:hostname]}.#{domain} --section main;
-sudo /opt/puppetlabs/bin/puppet config set certname $1.#{domain} --section main;
+sudo #{puppet_binary} config set server #{hosts[:server01][:hostname]}.#{domain} --section main;
+sudo #{puppet_binary} config set certname $1.#{domain} --section main;
 SCRIPT
 
 $puppet_server_firewall = <<~"SCRIPT"
@@ -93,7 +96,7 @@ SCRIPT
 
 $puppet_agent_register = <<~"SCRIPT"
 echo "#### PUPPET AGENT REGISTER ####"
-sudo /opt/puppetlabs/bin/puppet agent -t;
+sudo #{puppet_binary} agent -t;
 SCRIPT
 
 Vagrant.configure("2") do |config|
