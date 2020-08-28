@@ -1,7 +1,6 @@
-node "centos-agent.testlab", "ubuntu-agent.testlab" {
-  include ntpdemo
+node 'agent01.testlab', 'agent02.testlab' {
+  include nginx
 }
 
-node "default" {
-  
+node 'default' {
 }
