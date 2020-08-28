@@ -1,0 +1,5 @@
+---
+nginx::vhosts_port: '80'
+nginx::vhosts_root: '/var/www'
+nginx::vhosts_name: 'the-puppet-project.com'
+nginx::vhosts_ensure: 'present'
