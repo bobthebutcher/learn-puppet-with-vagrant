@@ -5,6 +5,11 @@
 # @example
 #   include nginx
 class nginx (
+  String $package_ensure,
+  String $config_ensure,
+  String $service_ensure,
+  Boolean $service_enable,
+  Boolean $service_restart,
   $package_name  = $nginx::params::package_name,
   $config_path   = $nginx::params::config_path,
   $config_source = $nginx::params::config_source,
